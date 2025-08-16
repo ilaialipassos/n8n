@@ -1,0 +1,152 @@
+{
+  "name": "Agente Clínica • Compat",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "clinica", "responseMode": "onReceived" },
+      "id": "webhook1",
+      "name": "Webhook • Entrada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [120, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Normaliza campo messageText a partir de payloads comuns\nconst b = $json.body || $json || {};\nlet msg = b.message || b.text || b.Body || (b.messages && b.messages[0] && (b.messages[0].text || b.messages[0].body)) || '';\nif (typeof msg === 'object' && msg.body) msg = msg.body;\nif (typeof msg !== 'string') msg = String(msg || '');\nreturn [{ messageText: msg.trim(), raw: b }];"
+      },
+      "id": "fn_normalize",
+      "name": "Function • Normalizar",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [360, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Classificador simples por palavras-chave\nconst text = ($json.messageText || '').toLowerCase();\nlet intent = 'faq';\nif (/(agend|marc|consulta|atendimento)/.test(text)) intent = 'agendar';\nif (/(confirm|confirmar)/.test(text)) intent = 'confirmar';\nif (/(cancel|desmarc|remarc)/.test(text)) intent = 'cancelar';\nif (/(endereco|endereço|conv[eê]nio|hor[aá]rio|valor|pre[çc]o|como chegar)/.test(text)) intent = 'faq';\nreturn [{ intent, messageText: $json.messageText }];"
+      },
+      "id": "fn_classify",
+      "name": "Function • Classificar",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "propertyName": "intent",
+        "rules": {
+          "values": [
+            { "operation": "equal", "value": "agendar" },
+            { "operation": "equal", "value": "confirmar" },
+            { "operation": "equal", "value": "cancelar" },
+            { "operation": "equal", "value": "faq" }
+          ]
+        }
+      },
+      "id": "switch_intent",
+      "name": "Switch • Roteamento",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": { "string": [
+          { "name": "reply", "value": "Para agendar, me informe: Nome; Especialidade; Data (DD/MM); Hora (HH:MM). Ex.: Ana Silva; Cardiologia; 22/08; 14:00" }
+        ]}
+      },
+      "id": "set_agendar",
+      "name": "Set • Resposta Agendar",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1080, 160]
+    },
+    {
+      "parameters": { "responseBody": "={{$json.reply}}" },
+      "id": "respond_agendar",
+      "name": "Respond • Webhook (agendar)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1320, 160]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": { "string": [
+          { "name": "reply", "value": "Sua consulta está confirmada ✅ Caso precise alterar, responda \"remarcar\"." }
+        ]}
+      },
+      "id": "set_confirmar",
+      "name": "Set • Resposta Confirmar",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": { "responseBody": "={{$json.reply}}" },
+      "id": "respond_confirmar",
+      "name": "Respond • Webhook (confirmar)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": { "string": [
+          { "name": "reply", "value": "Cancelamento registrado. Deseja reagendar? Envie: Nome; Especialidade; Data; Hora." }
+        ]}
+      },
+      "id": "set_cancelar",
+      "name": "Set • Resposta Cancelar",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1080, 440]
+    },
+    {
+      "parameters": { "responseBody": "={{$json.reply}}" },
+      "id": "respond_cancelar",
+      "name": "Respond • Webhook (cancelar)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1320, 440]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": { "string": [
+          { "name": "reply", "value": "Informações: Endereço [preencher]; Convênios [preencher]; Horários [preencher]. Posso agendar para você?" }
+        ]}
+      },
+      "id": "set_faq",
+      "name": "Set • Resposta FAQ",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1080, 580]
+    },
+    {
+      "parameters": { "responseBody": "={{$json.reply}}" },
+      "id": "respond_faq",
+      "name": "Respond • Webhook (faq)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1320, 580]
+    }
+  ],
+  "connections": {
+    "Webhook • Entrada": { "main": [[{ "node": "Function • Normalizar", "type": "main", "index": 0 }]] },
+    "Function • Normalizar": { "main": [[{ "node": "Function • Classificar", "type": "main", "index": 0 }]] },
+    "Function • Classificar": { "main": [[{ "node": "Switch • Roteamento", "type": "main", "index": 0 }]] },
+    "Switch • Roteamento": {
+      "main": [
+        [{ "node": "Set • Resposta Agendar", "type": "main", "index": 0 }],
+        [{ "node": "Set • Resposta Confirmar", "type": "main", "index": 0 }],
+        [{ "node": "Set • Resposta Cancelar", "type": "main", "index": 0 }],
+        [{ "node": "Set • Resposta FAQ", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set • Resposta Agendar": { "main": [[{ "node": "Respond • Webhook (agendar)", "type": "main", "index": 0 }]] },
+    "Set • Resposta Confirmar": { "main": [[{ "node": "Respond • Webhook (confirmar)", "type": "main", "index": 0 }]] },
+    "Set • Resposta Cancelar": { "main": [[{ "node": "Respond • Webhook (cancelar)", "type": "main", "index": 0 }]] },
+    "Set • Resposta FAQ": { "main": [[{ "node": "Respond • Webhook (faq)", "type": "main", "index": 0 }]] }
+  }
+}
